@@ -1,3 +1,4 @@
+from rest_framework.authentication import TokenAuthentication
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.response import Response
@@ -7,7 +8,7 @@ from .compat import get_request_data
 from .serializers import (
     JSONWebTokenSerializer, RefreshJSONWebTokenSerializer,
     VerifyJSONWebTokenSerializer,
-    SocialTokenSerializer)
+    SocialTokenSerializer, DefaultSerializer)
 
 jwt_response_payload_handler = api_settings.JWT_RESPONSE_PAYLOAD_HANDLER
 
@@ -68,7 +69,7 @@ class JSONWebTokenAPIView(APIView):
 
 class ObtainSocialJSONWebToken(JSONWebTokenAPIView):
     """
-    API View that receives a POST with a backend and authorization code.
+    API View that receives a POST with a social backend and authorization code.
 
     Returns a JSON Web Token that can be used for authenticated requests.
     """
@@ -79,6 +80,17 @@ class ObtainSocialJSONWebToken(JSONWebTokenAPIView):
         context = super(ObtainSocialJSONWebToken, self).get_serializer_context()
         context.setdefault('request', self.request)
         return context
+
+
+class DRFTokenToJWONWebToken(JSONWebTokenAPIView):
+    """
+    API View that receives a DRF Authentication Token.
+
+    Returns a JSON Web Token that can be used for authenticated requests.
+    """
+
+    serializer_class = DefaultSerializer
+    authentication_classes = (TokenAuthentication,)
 
 
 class ObtainJSONWebToken(JSONWebTokenAPIView):

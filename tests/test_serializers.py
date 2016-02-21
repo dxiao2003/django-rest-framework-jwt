@@ -103,33 +103,47 @@ class JSONWebTokenSerializerTests(TestCase):
         self.assertFalse(is_valid)
         self.assertEqual(serializer.errors, expected_error)
 
-test_backend = 'backend'
-test_code = 'code'
-test_username = "test user"
-test_email = "test@test.com"
+
+DEFAULT_BACKEND = 'backend'
+DEFAULT_CODE = 'code'
+DEFAULT_USERNAME = "test user"
+DEFAULT_EMAIL = "test@test.com"
 
 
-def patch_backend(f):
-    @patch('rest_framework_jwt.serializers.load_strategy')
-    @patch('rest_framework_jwt.serializers.load_backend')
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        arg_array = list(args)
-        load_strategy_mock = arg_array.pop()
-        load_backend_mock = arg_array.pop()
-        load_strategy_mock.return_value = "test strategy"
-        backend_mock = MagicMock()
-        load_backend_mock.return_value = backend_mock
-        backend_mock.auth_complete.return_value = \
-            User(pk=1, username=test_username, email=test_email)
-        r = f(*arg_array, **kwargs)
-        load_backend_mock.assert_called_once_with(
-            "test strategy",
-            test_backend,
-            reverse(NAMESPACE + ":complete", args=(test_backend,))
-        )
-        return r
-    return decorated
+def patch_backend(f=None, **kwargs):
+    test_backend = kwargs.get('backend', DEFAULT_BACKEND)
+    test_code = kwargs.get('code', DEFAULT_CODE)
+    test_username = kwargs.get('username', DEFAULT_USERNAME)
+    test_email = kwargs.get('email', DEFAULT_EMAIL)
+
+    def decorator(func):
+        @patch('rest_framework_jwt.serializers.load_strategy')
+        @patch('rest_framework_jwt.serializers.load_backend')
+        @wraps(func)
+        def decorated(*args, **kwargs):
+            arg_array = list(args)
+            load_strategy_mock = arg_array.pop()
+            load_backend_mock = arg_array.pop()
+            load_strategy_mock.return_value = "test strategy"
+            backend_mock = MagicMock()
+            load_backend_mock.return_value = backend_mock
+            backend_mock.auth_complete.return_value = \
+                User(pk=1, username=test_username, email=test_email)
+            r = func(*arg_array, **kwargs)
+            load_backend_mock.assert_called_with(
+                "test strategy",
+                test_backend,
+                reverse(NAMESPACE + ":complete", args=(test_backend,))
+            )
+            request = load_strategy_mock.call_args[1]['request']
+            assert request.data['code'] == test_code
+            return r
+        return decorated
+
+    if f is None:
+        return decorator
+    elif callable(f):
+        return decorator(f)
 
 
 urlpatterns = patterns(
@@ -144,17 +158,23 @@ class SocialTokenSerializerTestCase(TestCase):
     urls = 'tests.test_serializers'
 
     def test_login(self):
+        mock_request = MagicMock()
+        my_code = 'my test code'
+        my_backend = 'my test backend'
+        my_username = 'my test user'
+
+        mock_request.configure_mock(data={'code': my_code})
         serializer = SocialTokenSerializer(
             data={
-                'backend': test_backend,
-                'code': test_code
+                'backend': my_backend,
+                'code': my_code
             },
             context={
-                'request': {}
+                'request': mock_request
             }
         )
 
-        @patch_backend
+        @patch_backend(backend=my_backend, code=my_code, username=my_username)
         def is_valid_call():
             return serializer.is_valid()
 
@@ -164,7 +184,7 @@ class SocialTokenSerializerTestCase(TestCase):
         decoded_payload = utils.jwt_decode_handler(token)
 
         self.assertTrue(is_valid)
-        self.assertEqual(decoded_payload['username'], test_username)
+        self.assertEqual(decoded_payload['username'], my_username)
 
     def test_required_fields(self):
         serializer = SocialTokenSerializer(data={})

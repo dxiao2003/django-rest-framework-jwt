@@ -27,6 +27,29 @@ jwt_decode_handler = api_settings.JWT_DECODE_HANDLER
 jwt_get_username_from_payload = api_settings.JWT_PAYLOAD_GET_USERNAME_HANDLER
 
 
+class DefaultSerializer(Serializer):
+    """
+    Serializer class that takes a DRF token.
+    """
+    def validate(self, data):
+        request = self.context['request']
+        user = request.user
+
+        if not user.is_active:
+            msg = _('User account is disabled.')
+            raise serializers.ValidationError(msg)
+        elif user.is_anonymous:
+            msg = _('Must be logged in.')
+            raise serializers.ValidationError(msg)
+        else:
+            payload = jwt_payload_handler(user)
+
+            return {
+                'token': jwt_encode_handler(payload),
+                'user': user
+            }
+
+
 class SocialTokenSerializer(Serializer):
     """
     Serializer class used to validate a social authorization code.  Uses

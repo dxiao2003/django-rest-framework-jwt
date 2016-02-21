@@ -16,8 +16,8 @@ from rest_framework_jwt.settings import api_settings, DEFAULTS
 from social.apps.django_app.views import NAMESPACE
 
 from . import utils as test_utils
-from .test_serializers import patch_backend, test_backend, test_code, \
-    test_username
+from .test_serializers import patch_backend, DEFAULT_BACKEND, DEFAULT_CODE, \
+    DEFAULT_USERNAME
 
 
 User = get_user_model()
@@ -88,13 +88,13 @@ class SocialTokenTestCase(BaseTestCase):
         client = APIClient(enforce_csrf_checks=True)
 
         response = client.post('/auth-token-social/',
-                               {'backend': test_backend, 'code': test_code},
+                               {'backend': DEFAULT_BACKEND, 'code': DEFAULT_CODE},
                                format='json')
 
         decoded_payload = utils.jwt_decode_handler(response.data['token'])
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(decoded_payload['username'], test_username)
+        self.assertEqual(decoded_payload['username'], DEFAULT_USERNAME)
 
 
 class ObtainJSONWebTokenTests(BaseTestCase):
