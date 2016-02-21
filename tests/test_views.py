@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from django import get_version
 from django.test import TestCase
 from django.test.utils import override_settings
-from django.conf.urls import patterns
+from django.conf.urls import patterns, include
 from freezegun import freeze_time
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -13,8 +13,12 @@ from rest_framework.test import APIClient
 from rest_framework_jwt import utils
 from rest_framework_jwt.compat import get_user_model
 from rest_framework_jwt.settings import api_settings, DEFAULTS
+from social.apps.django_app.views import NAMESPACE
 
 from . import utils as test_utils
+from .test_serializers import patch_backend, test_backend, test_code, \
+    test_username
+
 
 User = get_user_model()
 
@@ -23,9 +27,11 @@ NO_CUSTOM_USER_MODEL = 'Custom User Model only supported after Django 1.5'
 urlpatterns = patterns(
     '',
     (r'^auth-token/$', 'rest_framework_jwt.views.obtain_jwt_token'),
+    (r'^auth-token-social/$',
+     'rest_framework_jwt.views.obtain_social_jwt_token'),
     (r'^auth-token-refresh/$', 'rest_framework_jwt.views.refresh_jwt_token'),
     (r'^auth-token-verify/$', 'rest_framework_jwt.views.verify_jwt_token'),
-
+    (r'^social/', include('social.apps.django_app.urls', namespace=NAMESPACE))
 )
 
 orig_datetime = datetime
@@ -71,6 +77,24 @@ class TestCustomResponsePayload(BaseTestCase):
     def tearDown(self):
         api_settings.JWT_RESPONSE_PAYLOAD_HANDLER =\
             DEFAULTS['JWT_RESPONSE_PAYLOAD_HANDLER']
+
+
+class SocialTokenTestCase(BaseTestCase):
+    @patch_backend
+    def test_jwt_login_social(self):
+        """
+        Ensure JWT login view when posting test social credentials
+        """
+        client = APIClient(enforce_csrf_checks=True)
+
+        response = client.post('/auth-token-social/',
+                               {'backend': test_backend, 'code': test_code},
+                               format='json')
+
+        decoded_payload = utils.jwt_decode_handler(response.data['token'])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(decoded_payload['username'], test_username)
 
 
 class ObtainJSONWebTokenTests(BaseTestCase):

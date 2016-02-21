@@ -6,6 +6,12 @@ from datetime import datetime, timedelta
 from django.contrib.auth import authenticate
 from django.utils.translation import ugettext as _
 from rest_framework import serializers
+from rest_framework.reverse import reverse
+from rest_framework import exceptions
+from social.apps.django_app.utils import load_backend, load_strategy
+from social.apps.django_app.views import NAMESPACE
+from social.exceptions import MissingBackend
+from social.utils import requests
 from .compat import Serializer
 
 from rest_framework_jwt.settings import api_settings
@@ -19,6 +25,54 @@ jwt_payload_handler = api_settings.JWT_PAYLOAD_HANDLER
 jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
 jwt_decode_handler = api_settings.JWT_DECODE_HANDLER
 jwt_get_username_from_payload = api_settings.JWT_PAYLOAD_GET_USERNAME_HANDLER
+
+
+class SocialTokenSerializer(Serializer):
+    """
+    Serializer class used to validate a social authorization code.  Uses
+    `python-social-auth` to verify the social login.  Posted data should
+    include a `backend` and a `code` to send to the authorization service
+    in order to get an access token and load the user.
+    """
+
+    backend = serializers.CharField(max_length=256)
+    code = serializers.CharField(max_length=1024)
+
+    def validate(self, data):
+        request = self.context['request']
+        backend = data['backend']
+        strategy = load_strategy(request=request)
+
+        try:
+            backend = load_backend(
+                strategy,
+                backend,
+                reverse(NAMESPACE + ":complete", args=(backend,))
+            )
+        except MissingBackend:
+            msg = 'Invalid token header. Invalid backend.'
+            raise exceptions.ValidationError(msg)
+
+        try:
+            user = backend.auth_complete()
+        except requests.HTTPError as e:
+            msg = e.response.text
+            raise exceptions.ValidationError(msg)
+
+        if not user:
+            msg = 'Bad credentials.'
+            raise exceptions.ValidationError(msg)
+        else:
+            if not user.is_active:
+                msg = _('User account is disabled.')
+                raise serializers.ValidationError(msg)
+
+            payload = jwt_payload_handler(user)
+
+            return {
+                'token': jwt_encode_handler(payload),
+                'user': user
+            }
 
 
 class JSONWebTokenSerializer(Serializer):

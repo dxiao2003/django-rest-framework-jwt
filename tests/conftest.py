@@ -34,7 +34,7 @@ def pytest_configure():
             'django.contrib.sites',
             'django.contrib.messages',
             'django.contrib.staticfiles',
-
+            'social.apps.django_app.default',
             'tests',
         ),
         PASSWORD_HASHERS=(

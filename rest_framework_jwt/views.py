@@ -6,8 +6,8 @@ from .settings import api_settings
 from .compat import get_request_data
 from .serializers import (
     JSONWebTokenSerializer, RefreshJSONWebTokenSerializer,
-    VerifyJSONWebTokenSerializer
-)
+    VerifyJSONWebTokenSerializer,
+    SocialTokenSerializer)
 
 jwt_response_payload_handler = api_settings.JWT_RESPONSE_PAYLOAD_HANDLER
 
@@ -66,6 +66,21 @@ class JSONWebTokenAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class ObtainSocialJSONWebToken(JSONWebTokenAPIView):
+    """
+    API View that receives a POST with a backend and authorization code.
+
+    Returns a JSON Web Token that can be used for authenticated requests.
+    """
+
+    serializer_class = SocialTokenSerializer
+
+    def get_serializer_context(self):
+        context = super(ObtainSocialJSONWebToken, self).get_serializer_context()
+        context.setdefault('request', self.request)
+        return context
+
+
 class ObtainJSONWebToken(JSONWebTokenAPIView):
     """
     API View that receives a POST with a user's username and password.
@@ -97,3 +112,4 @@ class RefreshJSONWebToken(JSONWebTokenAPIView):
 obtain_jwt_token = ObtainJSONWebToken.as_view()
 refresh_jwt_token = RefreshJSONWebToken.as_view()
 verify_jwt_token = VerifyJSONWebToken.as_view()
+obtain_social_jwt_token = ObtainSocialJSONWebToken.as_view()
